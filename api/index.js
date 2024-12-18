@@ -138,7 +138,7 @@ app.get(`/auth/google/callback`, async (req, res) => {
   }
 });
 
-app.post("/albums", async (req, res) => {
+app.post("/albums", verifyJWT, async (req, res) => {
   try {
     const newAlbum = new Album(req.body);
     const album = await newAlbum.save();
@@ -149,7 +149,7 @@ app.post("/albums", async (req, res) => {
   }
 });
 
-app.put("/albums/:albumId", async (req, res) => {
+app.put("/albums/:albumId", verifyJWT, async (req, res) => {
   try {
     const { userId, description } = req.body;
 
@@ -175,7 +175,7 @@ app.put("/albums/:albumId", async (req, res) => {
   }
 });
 
-app.post("/albums/:albumId/share", async (req, res) => {
+app.post("/albums/:albumId/share", verifyJWT, async (req, res) => {
   try {
     const { emails, userId } = req.body;
 
@@ -229,7 +229,7 @@ app.post("/albums/:albumId/share", async (req, res) => {
   }
 });
 
-app.delete("/albums/:albumId", async (req, res) => {
+app.delete("/albums/:albumId", verifyJWT, async (req, res) => {
   try {
     const { userId } = req.body;
 
@@ -254,7 +254,7 @@ app.delete("/albums/:albumId", async (req, res) => {
   }
 });
 
-app.post("/albums/:albumId/images", async (req, res) => {
+app.post("/albums/:albumId/images", verifyJWT, async (req, res) => {
   try {
     const album = await Album.findById(req.params.albumId);
     if (!album) {
@@ -271,132 +271,145 @@ app.post("/albums/:albumId/images", async (req, res) => {
   }
 });
 
-app.post("/albums/:albumId/images", upload.single("file"), async (req, res) => {
-  try {
-    const { albumId } = req.params;
-    const { tags, person, isFavorite, name, userId } = req.body;
+app.post(
+  "/albums/:albumId/images",
+  verifyJWT,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { albumId } = req.params;
+      const { tags, person, isFavorite, name, userId } = req.body;
 
-    const album = await Album.findById(albumId);
-    if (!album) {
-      return res.status(404).json({ message: "Album not found." });
+      const album = await Album.findById(albumId);
+      if (!album) {
+        return res.status(404).json({ message: "Album not found." });
+      }
+
+      if (userId !== album.ownerId) {
+        return res
+          .status(403)
+          .json({ message: "You are not authorized to upload to this album." });
+      }
+
+      const file = req.file;
+      if (!file) return res.status(400).send("No file uploaded");
+
+      // Extract file size and type
+      const fileSize = fs.statSync(file.path).size;
+      const fileType = path.extname(file.originalname).toLowerCase();
+
+      if (fileSize > 5 * 1024 * 1024) {
+        return res
+          .status(400)
+          .json({ message: "File size exceeds the 5MB limit." });
+      }
+
+      if (![".jpg", ".png", ".gif"].includes(fileType)) {
+        return res
+          .status(400)
+          .json({ message: "Only image files are allowed (jpg, png, gif)." });
+      }
+
+      const result = await cloudinary.uploader.upload(file.path, {
+        folder: "uploads",
+      });
+
+      const newImage = {
+        albumId: albumId,
+        file: result.secure_url,
+        tags: tags || [],
+        person: person,
+        isFavorite: isFavorite || false,
+        name: name,
+        size: fileSize,
+      };
+
+      const imageData = new Image(newImage);
+      await imageData.save();
+
+      fs.unlinkSync(file.path);
+
+      res.status(200).json({
+        message: "Image uploaded successfully.",
+        imageData,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error." });
     }
-
-    if (userId !== album.ownerId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to upload to this album." });
-    }
-
-    const file = req.file;
-    if (!file) return res.status(400).send("No file uploaded");
-
-    // Extract file size and type
-    const fileSize = fs.statSync(file.path).size;
-    const fileType = path.extname(file.originalname).toLowerCase();
-
-    if (fileSize > 5 * 1024 * 1024) {
-      return res
-        .status(400)
-        .json({ message: "File size exceeds the 5MB limit." });
-    }
-
-    if (![".jpg", ".png", ".gif"].includes(fileType)) {
-      return res
-        .status(400)
-        .json({ message: "Only image files are allowed (jpg, png, gif)." });
-    }
-
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: "uploads",
-    });
-
-    const newImage = {
-      albumId: albumId,
-      file: result.secure_url,
-      tags: tags || [],
-      person: person,
-      isFavorite: isFavorite || false,
-      name: name,
-      size: fileSize,
-    };
-
-    const imageData = new Image(newImage);
-    await imageData.save();
-
-    fs.unlinkSync(file.path);
-
-    res.status(200).json({
-      message: "Image uploaded successfully.",
-      imageData,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error." });
   }
-});
+);
 
-app.put("/albums/:albumId/images/:imageId/favorite", async (req, res) => {
-  try {
-    const { albumId, imageId } = req.params;
-    const { userId } = req.body;
+app.put(
+  "/albums/:albumId/images/:imageId/favorite",
+  verifyJWT,
+  async (req, res) => {
+    try {
+      const { albumId, imageId } = req.params;
+      const { userId } = req.body;
 
-    const album = await Album.findById(albumId);
-    if (!album) {
-      return res.status(404).json({ message: "Album not found." });
+      const album = await Album.findById(albumId);
+      if (!album) {
+        return res.status(404).json({ message: "Album not found." });
+      }
+
+      if (userId !== album.ownerId) {
+        return res
+          .status(403)
+          .json({ message: "You are not authorized to upload to this album." });
+      }
+
+      const image = await Image.findById(imageId);
+      if (!image) {
+        return res.status(404).json({ message: "Image not found." });
+      }
+
+      const updatedImage = await Image.findByIdAndUpdate(
+        imageId,
+        { isFavorite: !image.isFavorite },
+        { new: true }
+      );
+
+      res
+        .status(200)
+        .json({ message: "Image updated successfully.", updatedImage });
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error." });
     }
-
-    if (userId !== album.ownerId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to upload to this album." });
-    }
-
-    const image = await Image.findById(imageId);
-    if (!image) {
-      return res.status(404).json({ message: "Image not found." });
-    }
-
-    const updatedImage = await Image.findByIdAndUpdate(
-      imageId,
-      { isFavorite: !image.isFavorite },
-      { new: true }
-    );
-
-    res
-      .status(200)
-      .json({ message: "Image updated successfully.", updatedImage });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error." });
   }
-});
+);
 
-app.put("/albums/:albumId/images/:imageId/comments", async (req, res) => {
-  try {
-    const { albumId, imageId } = req.params;
-    const { userId, comment } = req.body;
+app.put(
+  "/albums/:albumId/images/:imageId/comments",
+  verifyJWT,
+  async (req, res) => {
+    try {
+      const { albumId, imageId } = req.params;
+      const { userId, comment } = req.body;
 
-    const album = await Album.findById(albumId);
-    if (!album) {
-      return res.status(404).json({ message: "Album not found." });
+      const album = await Album.findById(albumId);
+      if (!album) {
+        return res.status(404).json({ message: "Album not found." });
+      }
+
+      const image = await Image.findById(imageId);
+      if (!image) {
+        return res.status(404).json({ message: "Image not found." });
+      }
+
+      image.comments.push({ user: userId, text: comment });
+
+      const updatedImage = await image.save();
+
+      res
+        .status(200)
+        .json({ message: "Image updated successfully.", updatedImage });
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error." });
     }
-
-    const image = await Image.findById(imageId);
-    if (!image) {
-      return res.status(404).json({ message: "Image not found." });
-    }
-
-    image.comments.push({ user: userId, text: comment });
-
-    const updatedImage = await image.save();
-
-    res
-      .status(200)
-      .json({ message: "Image updated successfully.", updatedImage });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error." });
   }
-});
+);
 
-app.delete("/albums/:albumId/images/:imageId", async (req, res) => {
+app.delete("/albums/:albumId/images/:imageId", verifyJWT, async (req, res) => {
   try {
     const { albumId, imageId } = req.params;
     const { userId } = req.body;
@@ -423,7 +436,7 @@ app.delete("/albums/:albumId/images/:imageId", async (req, res) => {
   }
 });
 
-app.get("/albums", async (req, res) => {
+app.get("/albums", verifyJWT, async (req, res) => {
   try {
     const albums = await Album.find();
     res.status(200).json({ message: "Albums fetch successfully.", albums });
@@ -432,7 +445,7 @@ app.get("/albums", async (req, res) => {
   }
 });
 
-app.get("/albums/:albumId/images", async (req, res) => {
+app.get("/albums/:albumId/images", verifyJWT, async (req, res) => {
   try {
     const { albumId } = req.params;
 
@@ -443,18 +456,46 @@ app.get("/albums/:albumId/images", async (req, res) => {
   }
 });
 
-app.get("/albums/:albumId/images/favorites", async (req, res) => {
-  try {
-    const { albumId } = req.params;
+app.put(
+  "/albums/:albumId/images/:imageId/favorite",
+  verifyJWT,
+  async (req, res) => {
+    try {
+      const { albumId, imageId } = req.params;
+      const { userId } = req.body;
 
-    const images = await Image.find({ albumId: albumId, isFavorite: true });
-    res.status(200).json({ message: "Images fetched successfully.", images });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error." });
+      const album = await Album.findById(albumId);
+      if (!album) {
+        return res.status(404).json({ message: "Album not found." });
+      }
+
+      if (userId !== album.ownerId) {
+        return res
+          .status(403)
+          .json({ message: "You are not authorized to update this album." });
+      }
+
+      const image = await Image.findById(imageId);
+      if (!image || image.albumId.toString() !== albumId) {
+        return res
+          .status(404)
+          .json({ message: "Image not found in this album." });
+      }
+
+      image.isFavorite = !image.isFavorite;
+      const updatedImage = await image.save();
+
+      res.status(200).json({
+        message: `Image favorite status updated successfully.`,
+        image: updatedImage,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error." });
+    }
   }
-});
+);
 
-app.get("/albums/:albumId/images", async (req, res) => {
+app.get("/albums/:albumId/images", verifyJWT, async (req, res) => {
   try {
     const { albumId } = req.params;
     const { tags } = req.query;
