@@ -9,7 +9,7 @@ const albumSchema = new mongoose.Schema(
     description: {
       type: String,
     },
-    ownerId: {
+    owner: {
       type: String,
       required: true,
     },
