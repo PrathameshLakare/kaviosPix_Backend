@@ -82,7 +82,7 @@ app.get(`/auth/google/callback`, async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `http://localhost:${PORT}/auth/google/callback`,
+        redirect_uri: `${process.env.FRONTEND_URL}/auth/google/callback`,
       },
       {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
