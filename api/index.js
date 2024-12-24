@@ -467,14 +467,14 @@ app.put(
   async (req, res) => {
     try {
       const { albumId, imageId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id;
 
       const album = await Album.findById(albumId);
       if (!album) {
         return res.status(404).json({ message: "Album not found." });
       }
 
-      if (userId !== album.ownerId) {
+      if (userId !== album.owner) {
         return res
           .status(403)
           .json({ message: "You are not authorized to update this album." });
