@@ -29,16 +29,14 @@ initializeDatabase();
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const verifyJWT = (req, res, next) => {
-  const token = req.headers["authorization"];
+  const token = req.cookies["access_token"];
 
   if (!token) {
     return res.status(401).json({ message: "Token not provided." });
   }
 
-  const tokenParts = token.split(" ");
-
   try {
-    const decodedToken = jwt.verify(tokenParts[1], JWT_SECRET);
+    const decodedToken = jwt.verify(token, JWT_SECRET);
     req.user = decodedToken;
     next();
   } catch (error) {
