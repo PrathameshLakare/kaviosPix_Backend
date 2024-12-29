@@ -89,6 +89,7 @@ app.get(`/auth/google/callback`, async (req, res) => {
       }
     );
 
+    console.log(tokenResponse.data.access_token);
     accessToken = tokenResponse.data.access_token;
 
     const googleUserDataResponse = await axios.get(
@@ -114,6 +115,8 @@ app.get(`/auth/google/callback`, async (req, res) => {
       await user.save();
     }
 
+    console.log("user here: ", user);
+
     const jwtToken = jwt.sign(
       { id: user._id, email: user.email, role: "user" },
       process.env.JWT_SECRET,
@@ -121,6 +124,7 @@ app.get(`/auth/google/callback`, async (req, res) => {
     );
 
     setSecureCookie(res, jwtToken);
+
     return res.redirect(`${process.env.FRONTEND_URL}/home`);
   } catch (error) {
     res
