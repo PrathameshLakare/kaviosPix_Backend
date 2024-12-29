@@ -4,7 +4,7 @@ function setSecureCookie(res, token) {
     secure: process.env.NODE_ENV === "production",
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: "none",
-    domain: process.env.FRONTEND_URL,
+    domain: ".example.com",
   });
 
   return res;
