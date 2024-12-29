@@ -128,6 +128,15 @@ app.get(`/auth/google/callback`, async (req, res) => {
   }
 });
 
+app.post("/logout", (req, res) => {
+  res.clearCookie("access_token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+  return res.status(200).json({ message: "Logged out successfully" });
+});
+
 app.get("/user/profile/google", verifyJWT, async (req, res) => {
   try {
     const userId = req.user.id;
